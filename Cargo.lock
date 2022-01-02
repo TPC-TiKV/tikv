@@ -323,6 +323,7 @@ dependencies = [
  "derive_more",
  "fail",
  "file_system",
+ "futures 0.3.15",
  "glommio",
  "lazy_static",
  "online_config",

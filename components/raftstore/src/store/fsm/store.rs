@@ -1469,9 +1469,10 @@ impl<EK: KvEngine, ER: RaftEngine> RaftBatchSystem<EK, ER> {
             receiver: self.system.fsm_receiver().clone(),
             tq_cfg: TaskQueueConfig {
                 name: "store-batch-system".to_string(),
+                // default is 1000.
                 shares: 1000,
                 // TODO(TPC): tune
-                latency: glommio::Latency::NotImportant,
+                latency: glommio::Latency::Matters(Duration::from_millis(1)),
             },
             builder: builder.clone(),
         };

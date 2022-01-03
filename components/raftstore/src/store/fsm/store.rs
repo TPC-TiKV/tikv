@@ -13,7 +13,7 @@ use std::{mem, u64};
 
 use batch_system::{
     BasicMailbox, BatchRouter, BatchSystem, Fsm, HandleResult, HandlerBuilder, HandlerConfig,
-    PollHandler, Priority, TaskQueueConfig,
+    PollHandler, Priority, TaskQueueConfig, GATE,
 };
 use crossbeam::channel::{unbounded, Sender, TryRecvError, TrySendError};
 use engine_traits::{Engines, KvEngine, Mutable, PerfContextKind, WriteBatch, WriteBatchExt};
@@ -831,7 +831,15 @@ impl<EK: KvEngine, ER: RaftEngine, T: Transport> PollHandler<PeerFsm<EK, ER>, St
 
             if let Some(write_worker) = &mut self.poll_ctx.sync_write_worker {
                 if !write_worker.is_empty() {
-                    glommio::spawn_local(write_worker.write_to_db(true)).detach();
+                    // NOTE(TPC): the reason not use gate::spawn_local() is it doesn't run the
+                    // future right away. Call glommio::spawn_local() manually to do it.
+                    let pass = GATE.with(|g| g.enter()).unwrap();
+                    let fut = write_worker.write_to_db(true);
+                    glommio::spawn_local(async move {
+                        fut.await;
+                        drop(pass);
+                    })
+                    .detach();
                 }
             }
 

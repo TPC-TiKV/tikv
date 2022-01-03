@@ -23,7 +23,7 @@ use tikv_util::time::Instant;
 use tikv_util::{debug, error, info, safe_panic, thd_name, warn};
 
 use async_channel::{self, Receiver, Sender, TrySendError};
-use glommio::{self, Latency, LocalExecutorBuilder, Placement, Shares};
+use glommio::{self, sync::Gate, Latency, LocalExecutorBuilder, Placement, Shares};
 
 /// A unify type for FSMs so that they can be sent to channel easily.
 pub enum FsmTypes<N, C> {
@@ -31,6 +31,10 @@ pub enum FsmTypes<N, C> {
     Control(Box<C>),
     // Used as a signal that scheduler should be shutdown.
     Empty,
+}
+
+thread_local! {
+    pub static GATE: Gate = Gate::new();
 }
 
 // A macro to introduce common definition of scheduler.
@@ -639,7 +643,10 @@ where
                         .unwrap()
                         .detach();
 
-                    futures::join!(j1, j2)
+                    j1.await;
+                    j2.await;
+                    // Waiting for futures like async I/O done.
+                    let _ = GATE.with(|g| g.clone()).close().await;
                 })
                 .unwrap();
             self.workers.lock().unwrap().push(t);

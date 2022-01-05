@@ -621,6 +621,7 @@ where
             // TODO(TPC): pin CPU and tune
             let t = LocalExecutorBuilder::new(Placement::Unbound)
                 .name(&name_prefix)
+                .spin_before_park(Duration::from_secs(10))
                 .spawn(move || async move {
                     tikv_util::thread_group::set_properties(props);
                     set_io_type(IOType::ForegroundWrite);

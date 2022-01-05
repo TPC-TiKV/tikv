@@ -1491,6 +1491,7 @@ where
 
         // Save raft state if it has changed or there is a snapshot.
         if prev_raft_state != self.raft_state || !ready.snapshot().is_empty() {
+            // TODO(TPC): it has order.
             write_task.raft_state = Some(self.raft_state.clone());
         }
 

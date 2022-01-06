@@ -16,7 +16,7 @@ use std::borrow::Cow;
 use std::ops::{Deref, DerefMut};
 use std::sync::atomic::AtomicUsize;
 use std::sync::{Arc, Mutex};
-use std::thread::{current, JoinHandle, ThreadId};
+use std::thread::{current, sleep_ms, JoinHandle, ThreadId};
 use std::time::Duration;
 use tikv_util::mpsc;
 use tikv_util::time::Instant;
@@ -68,7 +68,7 @@ macro_rules! impl_sched {
                 info!("try_send"; );
                 match sender.try_send($ty(fsm)) {
                     Ok(()) => {
-                        info!("try_send done"; "receiver_count" => sender.receiver_count(), "len" => sender.len());
+                        info!("try_send done"; "sender_count" => sender.sender_count(), "receiver_count" => sender.receiver_count(), "len" => sender.len());
                     }
                     // TODO: use debug instead.
                     Err(TrySendError::Full($ty(fsm))) | Err(TrySendError::Closed($ty(fsm))) => {
@@ -375,10 +375,13 @@ impl<N: Fsm + 'static, C: Fsm + 'static, Handler: PollHandler<N, C>> Poller<N, C
 
         if batch.is_empty() {
             self.handler.pause();
-            info!("await fsm_receiver"; "sender_count" => self.fsm_receiver.sender_count(), "len" => self.fsm_receiver.len());
-            if let Ok(fsm) = self.fsm_receiver.recv().await {
-                info!("await fsm_receiver done");
-                return batch.push(fsm);
+            loop {
+                info!("await fsm_receiver"; "sender_count" => self.fsm_receiver.sender_count(),  "receiver_count" => self.fsm_receiver.receiver_count(), "len" => self.fsm_receiver.len());
+                if let Ok(fsm) = self.fsm_receiver.try_recv() {
+                    info!("await fsm_receiver done");
+                    return batch.push(fsm);
+                }
+                sleep_ms(10);
             }
         }
         !batch.is_empty()

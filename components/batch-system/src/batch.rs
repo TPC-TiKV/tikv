@@ -22,7 +22,8 @@ use tikv_util::mpsc;
 use tikv_util::time::Instant;
 use tikv_util::{debug, error, info, safe_panic, thd_name, warn};
 
-use async_channel::{self, Receiver, Sender, TrySendError};
+// use async_channel::{self, Receiver, Sender, TrySendError};
+use flume::{self, Receiver, Sender, TrySendError};
 use glommio::{self, sync::Gate, Latency, LocalExecutorBuilder, Placement, Shares};
 
 /// A unify type for FSMs so that they can be sent to channel easily.
@@ -68,7 +69,9 @@ macro_rules! impl_sched {
                 match sender.try_send($ty(fsm)) {
                     Ok(()) => {}
                     // TODO: use debug instead.
-                    Err(TrySendError::Full($ty(fsm))) | Err(TrySendError::Closed($ty(fsm))) => {
+                    // Err(TrySendError::Full($ty(fsm))) | Err(TrySendError::Closed($ty(fsm))) => {
+                    Err(TrySendError::Full($ty(fsm)))
+                    | Err(TrySendError::Disconnected($ty(fsm))) => {
                         warn!("failed to schedule fsm {:p}", fsm)
                     }
                     _ => unreachable!(),
@@ -372,7 +375,8 @@ impl<N: Fsm + 'static, C: Fsm + 'static, Handler: PollHandler<N, C>> Poller<N, C
 
         if batch.is_empty() {
             self.handler.pause();
-            if let Ok(fsm) = self.fsm_receiver.recv().await {
+            // if let Ok(fsm) = self.fsm_receiver.recv().await {
+            if let Ok(fsm) = self.fsm_receiver.recv_async().await {
                 return batch.push(fsm);
             }
         }
@@ -793,8 +797,8 @@ pub fn create_system<N: Fsm, C: Fsm>(
 ) -> (BatchRouter<N, C>, BatchSystem<N, C>) {
     let state_cnt = Arc::new(AtomicUsize::new(0));
     let control_box = BasicMailbox::new(sender, controller, state_cnt.clone());
-    let (tx, rx) = async_channel::unbounded();
-    let (tx2, rx2) = async_channel::unbounded();
+    let (tx, rx) = flume::unbounded();
+    let (tx2, rx2) = flume::unbounded();
     let normal_scheduler = NormalScheduler {
         sender: tx.clone(),
         low_sender: tx2.clone(),

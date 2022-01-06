@@ -646,6 +646,19 @@ where
                         .unwrap()
                         .detach();
 
+                    j1.await;
+                    // Waiting for futures like async I/O done.
+                    let _ = GATE.with(|g| g.clone()).close().await;
+                })
+                .unwrap();
+
+            self.workers.lock().unwrap().push(t);
+            let t = LocalExecutorBuilder::new(Placement::Unbound)
+                .name(&name_prefix)
+                .spawn(move || async move {
+                    // tikv_util::thread_group::set_properties(props);
+                    set_io_type(IOType::ForegroundWrite);
+
                     let tq2 = glommio::executor().create_task_queue(
                         Shares::Static(tq2_cfg.shares),
                         tq2_cfg.latency,
@@ -655,7 +668,6 @@ where
                         .unwrap()
                         .detach();
 
-                    j1.await;
                     j2.await;
                     // Waiting for futures like async I/O done.
                     let _ = GATE.with(|g| g.clone()).close().await;

@@ -63,13 +63,13 @@ macro_rules! impl_sched {
 
             #[inline]
             fn schedule(&self, fsm: Box<Self::Fsm>) {
-                let sender = match fsm.get_priority() {
-                    Priority::Normal => &self.sender,
-                    Priority::Low => &self.low_sender,
-                };
+                let sender = &self.sender;
                 // It's an unbounded queue so try_send is adequate.
+                info!("try_send"; );
                 match sender.try_send($ty(fsm)) {
-                    Ok(()) => {}
+                    Ok(()) => {
+                        info!("try_send done"; "receiver_count" => sender.receiver_count(), "len" => sender.len());
+                    }
                     // TODO: use debug instead.
                     Err(TrySendError::Full($ty(fsm))) | Err(TrySendError::Closed($ty(fsm))) => {
                         warn!("failed to schedule fsm {:p}", fsm)
@@ -375,7 +375,9 @@ impl<N: Fsm + 'static, C: Fsm + 'static, Handler: PollHandler<N, C>> Poller<N, C
 
         if batch.is_empty() {
             self.handler.pause();
+            info!("await fsm_receiver"; "sender_count" => self.fsm_receiver.sender_count(), "len" => self.fsm_receiver.len());
             if let Ok(fsm) = self.fsm_receiver.recv().await {
+                info!("await fsm_receiver done");
                 return batch.push(fsm);
             }
         }
@@ -394,12 +396,14 @@ impl<N: Fsm + 'static, C: Fsm + 'static, Handler: PollHandler<N, C>> Poller<N, C
         // calling `poll`, we do not need to configure a large value for `self.max_batch_size`.
         let mut run = true;
         while run && self.fetch_fsm(&mut batch).await {
+            info!("begin");
             // If there is some region wait to be deal, we must deal with it even if it has overhead
             // max size of batch. It's helpful to protect regions from becoming hungry
             // if some regions are hot points.
             let max_batch_size = std::cmp::max(self.max_batch_size, batch.normals.len());
             self.handler.begin(max_batch_size);
 
+            info!("handle control");
             if batch.control.is_some() {
                 let len = self.handler.handle_control(batch.control.as_mut().unwrap());
                 if batch.control.as_ref().unwrap().is_stopped() {
@@ -411,6 +415,7 @@ impl<N: Fsm + 'static, C: Fsm + 'static, Handler: PollHandler<N, C>> Poller<N, C
             // TODO(TPC): latency goal and may be more frequent yield.
             glommio::yield_if_needed().await;
 
+            info!("handle normal1");
             let mut hot_fsm_count = 0;
             for (i, p) in batch.normals.iter_mut().enumerate() {
                 let p = p.as_mut().unwrap();
@@ -444,6 +449,7 @@ impl<N: Fsm + 'static, C: Fsm + 'static, Handler: PollHandler<N, C>> Poller<N, C
             }
             glommio::yield_if_needed().await;
 
+            info!("handle normal2");
             let mut fsm_cnt = batch.normals.len();
             while batch.normals.len() < max_batch_size {
                 if let Ok(fsm) = self.fsm_receiver.try_recv() {
@@ -469,11 +475,13 @@ impl<N: Fsm + 'static, C: Fsm + 'static, Handler: PollHandler<N, C>> Poller<N, C
                 }
                 fsm_cnt += 1;
             }
+            info!("light_end");
             self.handler.light_end(&mut batch.normals);
             for offset in &to_skip_end {
                 batch.schedule(&self.router, *offset, true);
             }
             to_skip_end.clear();
+            info!("end");
             self.handler.end(&mut batch.normals);
 
             // Because release use `swap_remove` internally, so using pop here
@@ -482,6 +490,7 @@ impl<N: Fsm + 'static, C: Fsm + 'static, Handler: PollHandler<N, C>> Poller<N, C
                 batch.schedule(&self.router, r, false);
             }
             glommio::yield_if_needed().await;
+            info!("next round");
         }
         if let Some(fsm) = batch.control.take() {
             self.router.control_scheduler.schedule(fsm);
@@ -621,7 +630,6 @@ where
             // TODO(TPC): pin CPU and tune
             let t = LocalExecutorBuilder::new(Placement::Unbound)
                 .name(&name_prefix)
-                .spin_before_park(Duration::from_secs(10))
                 .spawn(move || async move {
                     tikv_util::thread_group::set_properties(props);
                     set_io_type(IOType::ForegroundWrite);
@@ -807,13 +815,13 @@ pub fn create_system<N: Fsm, C: Fsm>(
         sender: tx.clone(),
         low_sender: tx2,
     };
-    let pool_state_builder = PoolStateBuilder {
-        max_batch_size: cfg.max_batch_size(),
-        reschedule_duration: cfg.reschedule_duration.0,
-        fsm_receiver: rx.clone(),
-        fsm_sender: tx,
-        pool_size: cfg.pool_size,
-    };
+    // let pool_state_builder = PoolStateBuilder {
+    // max_batch_size: cfg.max_batch_size(),
+    // reschedule_duration: cfg.reschedule_duration.0,
+    // fsm_receiver: rx.clone(),
+    // fsm_sender: tx,
+    // pool_size: cfg.pool_size,
+    // };
     let router = Router::new(control_box, normal_scheduler, control_scheduler, state_cnt);
     let system = BatchSystem {
         name_prefix: None,
@@ -826,7 +834,7 @@ pub fn create_system<N: Fsm, C: Fsm>(
         joinable_workers: Arc::new(Mutex::new(Vec::new())),
         reschedule_duration: cfg.reschedule_duration.0,
         low_priority_pool_size: cfg.low_priority_pool_size,
-        pool_state_builder: Some(pool_state_builder),
+        pool_state_builder: None,
     };
     (router, system)
 }

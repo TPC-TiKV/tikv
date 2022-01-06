@@ -279,6 +279,7 @@ where
         cmd: RaftCommand<EK::Snapshot>,
     ) -> std::result::Result<(), TrySendError<RaftCommand<EK::Snapshot>>> {
         let region_id = cmd.request.get_header().get_region_id();
+        info!("send_raft_command"; "region_id" => region_id);
         match self.send(region_id, PeerMsg::RaftCommand(cmd)) {
             Ok(()) => Ok(()),
             Err(TrySendError::Full(PeerMsg::RaftCommand(cmd))) => Err(TrySendError::Full(cmd)),
@@ -1505,8 +1506,10 @@ impl<EK: KvEngine, ER: RaftEngine> RaftBatchSystem<EK, ER> {
 
         // Make sure Msg::Start is the first message each FSM received.
         for addr in address {
+            info!("send start"; "addr" => addr);
             self.router.force_send(addr, PeerMsg::Start).unwrap();
         }
+        info!("send control start");
         self.router
             .send_control(StoreMsg::Start {
                 store: store.clone(),

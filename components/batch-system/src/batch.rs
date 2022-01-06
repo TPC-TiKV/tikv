@@ -375,14 +375,15 @@ impl<N: Fsm + 'static, C: Fsm + 'static, Handler: PollHandler<N, C>> Poller<N, C
 
         if batch.is_empty() {
             self.handler.pause();
-            loop {
-                info!("await fsm_receiver"; "sender_count" => self.fsm_receiver.sender_count(),  "receiver_count" => self.fsm_receiver.receiver_count(), "len" => self.fsm_receiver.len());
-                if let Ok(fsm) = self.fsm_receiver.try_recv() {
-                    info!("await fsm_receiver done");
-                    return batch.push(fsm);
-                }
-                sleep_ms(10);
+            // loop {
+            info!("await fsm_receiver"; "sender_count" => self.fsm_receiver.sender_count(),  "receiver_count" => self.fsm_receiver.receiver_count(), "len" => self.fsm_receiver.len());
+            // if let Ok(fsm) = self.fsm_receiver.try_recv() {
+            if let Ok(fsm) = self.fsm_receiver.recv().await {
+                info!("await fsm_receiver done");
+                return batch.push(fsm);
             }
+            // sleep_ms(10);
+            // }
         }
         !batch.is_empty()
     }

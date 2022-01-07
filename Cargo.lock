@@ -1852,7 +1852,7 @@ checksum = "9b919933a397b79c37e33b77bb2aa3dc8eb6e165ad809e58ff75bc7db2e34574"
 [[package]]
 name = "glommio"
 version = "0.6.0"
-source = "git+https://github.com/TPC-TiKV/glommio.git?branch=tpc#5c483eeced66ec1ceb5bccc0c34bdaabea152160"
+source = "git+https://github.com/TPC-TiKV/glommio.git?branch=tpc#50d8d859292a3d71d8af2bb1937e829d16aab171"
 dependencies = [
  "ahash 0.7.4",
  "bitflags",
@@ -3607,7 +3607,7 @@ dependencies = [
 [[package]]
 name = "raft-engine"
 version = "0.1.0"
-source = "git+https://github.com/TPC-TiKV/raft-engine.git?branch=tpc#0bacc943c1bb3015cf44ee3018ccf2774ef19a1a"
+source = "git+https://github.com/TPC-TiKV/raft-engine.git?branch=tpc-no-dsync#5296629581aa8ee719069a9652a2dcac0ff11dc2"
 dependencies = [
  "byteorder",
  "crc32fast",

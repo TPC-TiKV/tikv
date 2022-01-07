@@ -1472,7 +1472,8 @@ impl<EK: KvEngine, ER: RaftEngine> RaftBatchSystem<EK, ER> {
                 // default is 1000.
                 shares: 1000,
                 // TODO(TPC): tune
-                latency: glommio::Latency::Matters(Duration::from_millis(1)),
+                // latency: glommio::Latency::Matters(Duration::from_millis(1)),
+                latency: glommio::Latency::NotImportant,
             },
             builder: builder.clone(),
         };

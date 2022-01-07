@@ -626,26 +626,26 @@ where
                     tikv_util::thread_group::set_properties(props);
                     set_io_type(IOType::ForegroundWrite);
 
-                    let j1 = glommio::spawn_local(async move { poller1.poll().await }).detach();
-                    let j2 = glommio::spawn_local(async move { poller2.poll().await }).detach();
+                    // let j1 = glommio::spawn_local(async move { poller1.poll().await }).detach();
+                    // let j2 = glommio::spawn_local(async move { poller2.poll().await }).detach();
 
-                    // let tq1 = glommio::executor().create_task_queue(
-                    // Shares::Static(tq1_cfg.shares),
-                    // tq1_cfg.latency,
-                    // &tq1_cfg.name,
-                    // );
-                    // let j1 = glommio::spawn_local_into(async move { poller1.poll().await }, tq1)
-                    // .unwrap()
-                    // .detach();
+                    let tq1 = glommio::executor().create_task_queue(
+                        Shares::Static(tq1_cfg.shares),
+                        tq1_cfg.latency,
+                        &tq1_cfg.name,
+                    );
+                    let j1 = glommio::spawn_local_into(async move { poller1.poll().await }, tq1)
+                        .unwrap()
+                        .detach();
 
-                    // let tq2 = glommio::executor().create_task_queue(
-                    // Shares::Static(tq2_cfg.shares),
-                    // tq2_cfg.latency,
-                    // &tq2_cfg.name,
-                    // );
-                    // let j2 = glommio::spawn_local_into(async move { poller2.poll().await }, tq2)
-                    // .unwrap()
-                    // .detach();
+                    let tq2 = glommio::executor().create_task_queue(
+                        Shares::Static(tq2_cfg.shares),
+                        tq2_cfg.latency,
+                        &tq2_cfg.name,
+                    );
+                    let j2 = glommio::spawn_local_into(async move { poller2.poll().await }, tq2)
+                        .unwrap()
+                        .detach();
 
                     j1.await;
                     j2.await;

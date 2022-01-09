@@ -405,8 +405,6 @@ impl<N: Fsm + 'static, C: Fsm + 'static, Handler: PollHandler<N, C>> Poller<N, C
                     batch.release_control(&self.router.control_box, len);
                 }
             }
-            // TODO(TPC): latency goal and may be more frequent yield.
-            glommio::yield_if_needed().await;
 
             let mut hot_fsm_count = 0;
             for (i, p) in batch.normals.iter_mut().enumerate() {
@@ -439,7 +437,6 @@ impl<N: Fsm + 'static, C: Fsm + 'static, Handler: PollHandler<N, C>> Poller<N, C
                     }
                 }
             }
-            glommio::yield_if_needed().await;
 
             let mut fsm_cnt = batch.normals.len();
             while batch.normals.len() < max_batch_size {
@@ -478,7 +475,7 @@ impl<N: Fsm + 'static, C: Fsm + 'static, Handler: PollHandler<N, C>> Poller<N, C
             while let Some(r) = reschedule_fsms.pop() {
                 batch.schedule(&self.router, r, false);
             }
-            glommio::yield_if_needed().await;
+            glommio::executor().yield_task_queue_now().await;
         }
         if let Some(fsm) = batch.control.take() {
             self.router.control_scheduler.schedule(fsm);
